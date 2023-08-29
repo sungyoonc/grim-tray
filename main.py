@@ -13,7 +13,6 @@ class Mode(Enum):
 
 class Screenshot:
     def capture(self, mode, file="-", area="", output=""):
-        # TODO: Add save to file with output_mode
         if mode == Mode.AREA or mode == Mode.WINDOW:
             grim_subprocess = Popen(["grim", "-g", area, file], stdout=PIPE)
         elif mode == Mode.SCREEN:
@@ -42,7 +41,6 @@ class Screenshot:
         tray.showMessage("grim-tray", "Screenshot has been copied to clipboard", icon)
 
     def window(self):
-        # swaymsg -t get_tree | jq -r '.. | select(.pid? and .visible?) | .rect | "\(.x),\(.y) \(.width)x\(.height)"' | slurp
         swaymsg_subprocess = Popen(["swaymsg", "-t", "get_tree"], stdout=PIPE)
         jq_subprocess = Popen(
             [
@@ -53,9 +51,6 @@ class Screenshot:
             stdin=swaymsg_subprocess.stdout,
             stdout=PIPE,
         )
-        # geomatry_subprocess.wait()
-        # jq_subprocess.wait()
-
         geom_subprocess = Popen(
             ["slurp"], stdin=jq_subprocess.stdout, stdout=PIPE, stderr=PIPE
         )
@@ -70,7 +65,6 @@ class Screenshot:
         copy_subprocess = Popen(
             ["wl-copy", "--type", "image/png"], stdin=image.stdout, stdout=PIPE
         )
-        # TODO: error handling
         image.wait()
         copy_subprocess.wait()
         tray.showMessage("grim-tray", "Screenshot has been copied to clipboard", icon)
@@ -82,7 +76,29 @@ class Screenshot:
         copy_subprocess = Popen(
             ["wl-copy", "--type", "image/png"], stdin=image.stdout, stdout=PIPE
         )
-        # TODO: error handling
+        image.wait()
+        copy_subprocess.wait()
+        tray.showMessage("grim-tray", "Screenshot has been copied to clipboard", icon)
+
+    def output(self):
+        swaymsg_subprocess = Popen(["swaymsg", "-t", "get_outputs"], stdout=PIPE)
+        jq_subprocess = Popen(
+            [
+                "jq",
+                "-r",
+                r".[] | select(.focused) | .name",
+            ],
+            stdin=swaymsg_subprocess.stdout,
+            stdout=PIPE,
+        )
+        (output, _) = jq_subprocess.communicate()
+
+        image = self.capture(Mode.OUTPUT, output=output.strip().decode("utf-8"))
+        if image == None:
+            return
+        copy_subprocess = Popen(
+            ["wl-copy", "--type", "image/png"], stdin=image.stdout, stdout=PIPE
+        )
         image.wait()
         copy_subprocess.wait()
         tray.showMessage("grim-tray", "Screenshot has been copied to clipboard", icon)
@@ -94,7 +110,7 @@ ui = QApplication([])
 ui.setQuitOnLastWindowClosed(False)
 
 # Adding an icon
-icon = QIcon("icon.svg")  # TODO: fix icon not showing
+icon = QIcon("icon.svg")  # TODO: fix icon loading delay
 
 # Adding item on the menu bar
 tray = QSystemTrayIcon()
@@ -108,10 +124,13 @@ option_window = QAction("Window")
 option_window.triggered.connect(screenshot.window)
 option_screen = QAction("Screen")
 option_screen.triggered.connect(screenshot.screen)
+option_output = QAction("Output")
+option_output.triggered.connect(screenshot.output)
 
 menu.addAction(option_area)
 menu.addAction(option_window)
 menu.addAction(option_screen)
+menu.addAction(option_output)
 
 # To quit the app
 menu.addSeparator()
